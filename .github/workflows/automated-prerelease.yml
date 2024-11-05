@@ -5,10 +5,11 @@ on:
     workflows: ["Automated Builds"]
     types:
       - completed
+
 permissions:
   contents: write
   pull-requests: write
-  
+
 jobs:
   create-prerelease:
     runs-on: ubuntu-latest
@@ -33,14 +34,6 @@ jobs:
           echo "$changelog" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Create pre-release tag
-        id: create_tag
-        run: |
-          tag_name="prerelease-$(date +'%Y%m%d-%H%M%S')"
-          git tag $tag_name
-          git push origin $tag_name
-          echo "tag_name=$tag_name" >> $GITHUB_OUTPUT
-
       - name: Download artifacts
         uses: actions/download-artifact@v4.1.8
         with:
@@ -48,23 +41,32 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ github.event.workflow_run.id }}
 
+      - name: Prepare release assets
+        run: |
+          mkdir -p release_assets
+          for os in ubuntu-20.04 windows macos-universal; do
+            find ./artifacts -name "*$os*.zip" -exec cp {} ./release_assets/ \;
+          done
+
       - name: Create Release
         id: create_release
         uses: ncipollo/release-action@v1
         with:
-          tag: ${{ steps.create_tag.outputs.tag_name }}
-          name: "Pre-release ${{ steps.create_tag.outputs.tag_name }}"
+          tag: "latest-build"
+          name: "Latest Pre-release Build"
           body: |
             This is an automated pre-release based on the latest commit:
 
             Commit Message: ${{ steps.commit_info.outputs.message }}
             Commit SHA: ${{ steps.commit_info.outputs.sha }}
 
-            [Full Changelog](https://github.com/OseMine/variable-filter/commits/Build)
+            [Full Changelog](https://github.com/OseMine/variable-synth/commits/Build)
 
             Changes since last release:
             ${{ steps.changelog.outputs.changelog }}
           draft: false
           prerelease: true
           token: ${{ secrets.GITHUB_TOKEN }}
-          artifacts: "./artifacts/**/*"
+          artifacts: "./release_assets/*"
+          allowUpdates: true
+          replacesArtifacts: true
