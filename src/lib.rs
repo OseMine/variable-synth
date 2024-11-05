@@ -2,61 +2,46 @@ use nih_plug::prelude::*;
 use std::sync::Arc;
 
 mod params;
-mod synth;
 mod utils;
-
-use params::VariableSynthParams;
-use synth::Synthesizer;
+use params::{VariableSynthParams, Waveform};
+use utils::midi_note_to_freq;
 
 struct VariableSynth {
     params: Arc<VariableSynthParams>,
-    synth: Synthesizer,
+    current_note: Option<u8>,
 }
 
 impl Default for VariableSynth {
     fn default() -> Self {
         Self {
             params: Arc::new(VariableSynthParams::default()),
-            synth: Synthesizer::new(44100.0),
+            current_note: None,
         }
     }
 }
 
 impl Plugin for VariableSynth {
     const NAME: &'static str = "Variable Synth";
-    const VENDOR: &'static str = "OseMine";
-    const URL: &'static str = "https://github.com/OseMine/variable-synth";
-    const EMAIL: &'static str = "info@example.com";
+    const VENDOR: &'static str = "Muzikar";
+    const URL: &'static str = "";
+    const EMAIL: &'static str = "";
 
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-    const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[
-        AudioIOLayout {
-            main_input_channels: None,
-            main_output_channels: NonZeroU32::new(2),
-            ..AudioIOLayout::const_default()
-        }
-    ];
+    const AUDIO_IO_LAYOUTS: &'static [AudioIOLayout] = &[AudioIOLayout {
+        main_input_channels: None,
+        main_output_channels: NonZeroU32::new(2),
+        ..AudioIOLayout::const_default()
+    }];
+
+    const MIDI_INPUT: MidiConfig = MidiConfig::Basic;
+    const SAMPLE_ACCURATE_AUTOMATION: bool = true;
 
     type SysExMessage = ();
     type BackgroundTask = ();
 
     fn params(&self) -> Arc<dyn Params> {
         self.params.clone()
-    }
-
-    fn initialize(
-        &mut self,
-        _audio_io_layout: &AudioIOLayout,
-        buffer_config: &BufferConfig,
-        _context: &mut impl InitContext<Self>,
-    ) -> bool {
-        self.synth.set_sample_rate(buffer_config.sample_rate);
-        true
-    }
-
-    fn reset(&mut self) {
-        self.synth.reset();
     }
 
     fn process(
@@ -71,23 +56,42 @@ impl Plugin for VariableSynth {
                 if event.timing() > sample_id as u32 {
                     break;
                 }
-
                 match event {
-                    NoteEvent::NoteOn { note, velocity, .. } => {
-                        self.synth.note_on(note, velocity);
+                    NoteEvent::NoteOn { note, .. } => {
+                        self.current_note = Some(note);
                     }
                     NoteEvent::NoteOff { note, .. } => {
-                        self.synth.note_off(note);
+                        if self.current_note == Some(note) {
+                            self.current_note = None;
+                        }
                     }
                     _ => (),
                 }
-
                 next_event = context.next_event();
             }
 
-            let output = self.synth.generate();
-            for sample in channel_samples {
-                *sample = output;
+            let time = context.transport().pos_seconds().unwrap_or(0.0) as f32;
+            
+            if let Some(note) = self.current_note {
+                let frequency = midi_note_to_freq(note);
+                let phase = time * frequency * 2.0f32 * std::f32::consts::PI;
+                
+                let sample = match self.params.waveform.value() {
+                    Waveform::Sine => phase.sin(),
+                    Waveform::Saw => 2.0f32 * (phase / (2.0f32 * std::f32::consts::PI)).fract() - 1.0f32,
+                };
+
+                let gain = self.params.gain.smoothed.next();
+                let output = sample * gain;
+
+                for sample in channel_samples {
+                    *sample = output;
+                }
+            } else {
+                // Wenn keine Note gedrückt ist, geben wir Stille aus
+                for sample in channel_samples {
+                    *sample = 0.0;
+                }
             }
         }
 
@@ -96,8 +100,8 @@ impl Plugin for VariableSynth {
 }
 
 impl ClapPlugin for VariableSynth {
-    const CLAP_ID: &'static str = "com.muzikar.variable-synth";
-    const CLAP_DESCRIPTION: Option<&'static str> = Some("A variable synthesizer plugin");
+    const CLAP_ID: &'static str = "com.yourcompany.variablesynth";
+    const CLAP_DESCRIPTION: Option<&'static str> = Some("A variable waveform synthesizer");
     const CLAP_MANUAL_URL: Option<&'static str> = Some(Self::URL);
     const CLAP_SUPPORT_URL: Option<&'static str> = None;
     const CLAP_FEATURES: &'static [ClapFeature] = &[
@@ -108,7 +112,7 @@ impl ClapPlugin for VariableSynth {
 }
 
 impl Vst3Plugin for VariableSynth {
-    const VST3_CLASS_ID: [u8; 16] = *b"VariableSynth123";
+    const VST3_CLASS_ID: [u8; 16] = *b"VariableSynth...";
     const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] =
         &[Vst3SubCategory::Instrument, Vst3SubCategory::Synth];
 }
