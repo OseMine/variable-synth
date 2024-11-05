@@ -5,7 +5,10 @@ on:
     workflows: ["Automated Builds"]
     types:
       - completed
-
+permissions:
+  contents: write
+  pull-requests: write
+  
 jobs:
   create-prerelease:
     runs-on: ubuntu-latest
