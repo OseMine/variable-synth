@@ -9,6 +9,7 @@ use utils::midi_note_to_freq;
 struct VariableSynth {
     params: Arc<VariableSynthParams>,
     current_note: Option<u8>,
+    phase: f32, // Phase für die laufende Phasenberechnung
 }
 
 impl Default for VariableSynth {
@@ -16,6 +17,7 @@ impl Default for VariableSynth {
         Self {
             params: Arc::new(VariableSynthParams::default()),
             current_note: None,
+            phase: 0.0, // Initialisiere die Phase
         }
     }
 }
@@ -51,6 +53,8 @@ impl Plugin for VariableSynth {
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         let mut next_event = context.next_event();
+        let sample_rate = context.transport().sample_rate as f32; // Sample-Rate zur Phasenberechnung
+
         for (sample_id, channel_samples) in buffer.iter_samples().enumerate() {
             while let Some(event) = next_event {
                 if event.timing() > sample_id as u32 {
@@ -59,6 +63,7 @@ impl Plugin for VariableSynth {
                 match event {
                     NoteEvent::NoteOn { note, .. } => {
                         self.current_note = Some(note);
+                        self.phase = 0.0; // Setze die Phase beim Starten einer neuen Note zurück
                     }
                     NoteEvent::NoteOff { note, .. } => {
                         if self.current_note == Some(note) {
@@ -70,17 +75,22 @@ impl Plugin for VariableSynth {
                 next_event = context.next_event();
             }
 
-            let time = context.transport().pos_seconds().unwrap_or(0.0) as f32;
-            
             if let Some(note) = self.current_note {
                 let frequency = midi_note_to_freq(note);
-                let phase = time * frequency * 2.0f32 * std::f32::consts::PI;
                 
+                // Aktualisiere die Phase pro Sample, begrenze sie auf den Bereich [0, 2π]
+                self.phase += frequency * 2.0 * std::f32::consts::PI / sample_rate;
+                if self.phase > 2.0 * std::f32::consts::PI {
+                    self.phase -= 2.0 * std::f32::consts::PI;
+                }
+
+                // Berechne den Sample-Wert je nach gewähltem Wellenformtyp
                 let sample = match self.params.waveform.value() {
-                    Waveform::Sine => phase.sin(),
-                    Waveform::Saw => 2.0f32 * (phase / (2.0f32 * std::f32::consts::PI)).fract() - 1.0f32,
+                    Waveform::Sine => self.phase.sin(),
+                    Waveform::Saw => 2.0 * (self.phase / (2.0 * std::f32::consts::PI)).fract() - 1.0,
                 };
 
+                // Gain anwenden und das Ergebnis an die Kanäle ausgeben
                 let gain = self.params.gain.smoothed.next();
                 let output = sample * gain;
 
@@ -88,7 +98,7 @@ impl Plugin for VariableSynth {
                     *sample = output;
                 }
             } else {
-                // Wenn keine Note gedrückt ist, geben wir Stille aus
+                // Wenn keine Note aktiv ist, Stille ausgeben
                 for sample in channel_samples {
                     *sample = 0.0;
                 }
@@ -100,7 +110,7 @@ impl Plugin for VariableSynth {
 }
 
 impl ClapPlugin for VariableSynth {
-    const CLAP_ID: &'static str = "com.yourcompany.variablesynth";
+    const CLAP_ID: &'static str = "de.muzikar.variablesynth";
     const CLAP_DESCRIPTION: Option<&'static str> = Some("A variable waveform synthesizer");
     const CLAP_MANUAL_URL: Option<&'static str> = Some(Self::URL);
     const CLAP_SUPPORT_URL: Option<&'static str> = None;
