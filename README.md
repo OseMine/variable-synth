@@ -15,75 +15,96 @@ A versatile audio synthesizer plugin that implements various waveform types and 
 
 ## Adding a New Synthesizer
 
-1. Create a new file in `src/synth/`, e.g., `square.rs`.
-2. Implement the synthesizer in this file:
+This guide explains how to add a new oscillator (synth engine) to the plugin.
 
-```rust
-pub struct SquareOscillator {
-    // Oscillator-specific fields
-}
+### Step 1: Create the Oscillator File
 
-impl Oscillator for SquareOscillator {
-    fn new(sample_rate: f32) -> Self {
-        // Initialization logic
-    }
+1. In `src/synth/`, create a new file for the oscillator, such as `square.rs`.
+2. Implement the oscillator with the required trait methods as follows:
 
-    fn set_frequency(&mut self, freq: f32) {
-        // Frequency setting logic
-    }
+   ```rust
+   pub struct SquareOscillator {
+       // Oscillator-specific fields
+   }
 
-    fn generate(&mut self) -> f32 {
-        // Waveform generation logic
-    }
+   impl Oscillator for SquareOscillator {
+       fn new(sample_rate: f32) -> Self {
+           // Initialization logic
+       }
 
-    fn reset(&mut self) {
-        // Reset logic
-    }
-}
-```
+       fn set_frequency(&mut self, freq: f32) {
+           // Frequency setting logic
+       }
 
-3. Add the new synthesizer in `src/synth/mod.rs`:
+       fn generate(&mut self) -> f32 {
+           // Waveform generation logic
+       }
 
-```rust
-pub mod square;
-use square::SquareOscillator;
+       fn reset(&mut self) {
+           // Reset logic
+       }
+   }
+   ```
 
-// Add the new synthesizer to the SynthType enumeration
-pub enum SynthType {
-    // ...
-    Square,
-}
+### Step 2: Register the Oscillator in `mod.rs`
 
-// Update the Synthesizer structure
-impl Synthesizer {
-    // ...
-    pub fn set_synth_type(&mut self, synth_type: SynthType) {
-        self.oscillator = match synth_type {
-            // ...
-            SynthType::Square => Box::new(SquareOscillator::new(self.sample_rate)),
-        };
-    }
-}
-```
+1. Open `src/synth/mod.rs`.
+2. Add the new oscillator as a module:
 
-4. Update `src/params.rs` to add the new synthesizer type as an option:
+   ```rust
+   pub mod square;
+   use square::SquareOscillator;
+   ```
 
-```rust
-#[derive(Enum, PartialEq, Clone)]
-pub enum SynthType {
-    // ...
-    Square,
-}
-```
+3. Extend the `SynthType` enum to include the new oscillator type:
 
-5. In `src/lib.rs`, update the `process` function to consider the new synthesizer type:
+   ```rust
+   pub enum SynthType {
+       // Other synth types...
+       Square,
+   }
+   ```
 
-```rust
-self.synth.set_synth_type(match synth_type {
-    // ...
-    ParamSynthType::Square => SynthType::Square,
-});
-```
+4. Update the `Synthesizer` structure to support the new oscillator type:
+
+   ```rust
+   impl Synthesizer {
+       // Method to set the oscillator type
+       pub fn set_synth_type(&mut self, synth_type: SynthType) {
+           self.oscillator = match synth_type {
+               // Other types...
+               SynthType::Square => Box::new(SquareOscillator::new(self.sample_rate)),
+           };
+       }
+   }
+   ```
+
+### Step 3: Update Plugin Parameters in `params.rs`
+
+1. In `src/params.rs`, add the new oscillator type to the `SynthType` enum:
+
+   ```rust
+   #[derive(Enum, PartialEq, Clone)]
+   pub enum SynthType {
+       // Other synth types...
+       Square,
+   }
+   ```
+
+### Step 4: Modify the Main Processing Logic
+
+1. In `src/lib.rs`, update the `process` function to account for the new oscillator type. For example:
+
+   ```rust
+   self.synth.set_synth_type(match synth_type {
+       // Other synth types...
+       ParamSynthType::Square => SynthType::Square,
+   });
+   ```
+
+### Step 5: Rebuild the Project
+
+After implementing the steps above, rebuild the project to test your new oscillator.
 
 ## Contributing
 
@@ -98,7 +119,7 @@ self.synth.set_synth_type(match synth_type {
 1. Ensure Rust and Cargo are installed.
 2. Clone the repository: `git clone https://github.com/OseMine/variable-synth.git`
 3. Navigate to the project directory: `cd variable-synth`
-4. Install all the necessary dependencies: `cargo fetch`
+4. Install all necessary dependencies: `cargo fetch`
 5. Build the project: `cargo xtask bundle variable-synth --release`
 6. Find the plugin files in the `target/release` directory.
 
