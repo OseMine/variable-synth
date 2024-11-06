@@ -3,21 +3,27 @@ use std::sync::Arc;
 
 mod params;
 mod utils;
+mod synth;
 use params::{VariableSynthParams, Waveform};
 use utils::midi_note_to_freq;
+use synth::{WaveformGenerator, create_waveform};
 
 struct VariableSynth {
     params: Arc<VariableSynthParams>,
     current_note: Option<u8>,
-    phase: f32, // Phase für die laufende Phasenberechnung
+    phase: f32,
+    waveform_generator: Arc<dyn WaveformGenerator + Send + Sync>,
 }
+
 
 impl Default for VariableSynth {
     fn default() -> Self {
+        let params = Arc::new(VariableSynthParams::default());
         Self {
-            params: Arc::new(VariableSynthParams::default()),
+            waveform_generator: create_waveform(params.waveform.value()),
+            params,
             current_note: None,
-            phase: 0.0, // Initialisiere die Phase
+            phase: 0.0,
         }
     }
 }
@@ -53,7 +59,7 @@ impl Plugin for VariableSynth {
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         let mut next_event = context.next_event();
-        let sample_rate = context.transport().sample_rate as f32; // Sample-Rate zur Phasenberechnung
+        let sample_rate = context.transport().sample_rate as f32;
 
         for (sample_id, channel_samples) in buffer.iter_samples().enumerate() {
             while let Some(event) = next_event {
@@ -63,7 +69,7 @@ impl Plugin for VariableSynth {
                 match event {
                     NoteEvent::NoteOn { note, .. } => {
                         self.current_note = Some(note);
-                        self.phase = 0.0; // Setze die Phase beim Starten einer neuen Note zurück
+                        self.phase = 0.0;
                     }
                     NoteEvent::NoteOff { note, .. } => {
                         if self.current_note == Some(note) {
@@ -75,22 +81,22 @@ impl Plugin for VariableSynth {
                 next_event = context.next_event();
             }
 
+            // Überprüfe, ob sich die Wellenform geändert hat
+            if self.params.waveform.value() != self.params.waveform.default_plain_value() {
+                self.waveform_generator = create_waveform(self.params.waveform.value());
+            }
+
             if let Some(note) = self.current_note {
                 let frequency = midi_note_to_freq(note);
                 
-                // Aktualisiere die Phase pro Sample, begrenze sie auf den Bereich [0, 2π]
                 self.phase += frequency * 2.0 * std::f32::consts::PI / sample_rate;
                 if self.phase > 2.0 * std::f32::consts::PI {
                     self.phase -= 2.0 * std::f32::consts::PI;
                 }
 
-                // Berechne den Sample-Wert je nach gewähltem Wellenformtyp
-                let sample = match self.params.waveform.value() {
-                    Waveform::Sine => self.phase.sin(),
-                    Waveform::Saw => 2.0 * (self.phase / (2.0 * std::f32::consts::PI)).fract() - 1.0,
-                };
+                // Verwende den Waveform-Generator zur Sample-Berechnung
+                let sample = self.waveform_generator.generate(self.phase);
 
-                // Gain anwenden und das Ergebnis an die Kanäle ausgeben
                 let gain = self.params.gain.smoothed.next();
                 let output = sample * gain;
 
@@ -98,7 +104,6 @@ impl Plugin for VariableSynth {
                     *sample = output;
                 }
             } else {
-                // Wenn keine Note aktiv ist, Stille ausgeben
                 for sample in channel_samples {
                     *sample = 0.0;
                 }
