@@ -1,12 +1,12 @@
 use nih_plug::prelude::*;
 use std::sync::Arc;
-
 mod params;
 mod utils;
 mod synth;
 use params::{VariableSynthParams, Waveform};
 use utils::midi_note_to_freq;
 use synth::{WaveformGenerator, create_waveform};
+extern crate rand;
 
 struct VariableSynth {
     params: Arc<VariableSynthParams>,
@@ -14,7 +14,6 @@ struct VariableSynth {
     phase: f32,
     waveform_generator: Arc<dyn WaveformGenerator + Send + Sync>,
 }
-
 
 impl Default for VariableSynth {
     fn default() -> Self {
@@ -87,14 +86,16 @@ impl Plugin for VariableSynth {
             }
 
             if let Some(note) = self.current_note {
-                let frequency = midi_note_to_freq(note);
-                
+                let base_frequency = midi_note_to_freq(note); // Get frequency from MIDI note
+                let tuning_factor = self.params.tuning.value(); // Get tuning factor from the parameter
+                let frequency = base_frequency * (tuning_factor / 440.0); // Adjust frequency by tuning factor
+
                 self.phase += frequency * 2.0 * std::f32::consts::PI / sample_rate;
                 if self.phase > 2.0 * std::f32::consts::PI {
                     self.phase -= 2.0 * std::f32::consts::PI;
                 }
 
-                // Verwende den Waveform-Generator zur Sample-Berechnung
+                // Use the waveform generator to calculate the sample
                 let sample = self.waveform_generator.generate(self.phase);
 
                 let gain = self.params.gain.smoothed.next();

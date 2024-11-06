@@ -1,11 +1,14 @@
 use nih_plug::prelude::*;
 use std::sync::Arc;
+
 #[derive(Params)]
 pub struct VariableSynthParams {
     #[id = "waveform"]
     pub waveform: EnumParam<Waveform>,
     #[id = "gain"]
     pub gain: FloatParam,
+    #[id = "tuning"]
+    pub tuning: FloatParam,  // New tuning parameter
 }
 
 #[derive(Enum, PartialEq, Clone, Copy)]
@@ -14,6 +17,8 @@ pub enum Waveform {
     Sine,
     #[name = "Saw"]
     Saw,
+    #[name = "Analog Saw"]
+    AnalogSaw,
 }
 
 impl Default for VariableSynthParams {
@@ -28,6 +33,13 @@ impl Default for VariableSynthParams {
             )
             .with_smoother(SmoothingStyle::Linear(50.0))
             .with_unit(" dB"),
+            tuning: FloatParam::new(
+                "Tuning",
+                440.0, // Default value: 440 Hz
+                FloatRange::Linear { min: 20.0, max: 880.0 }, // Tuning range from 20 Hz to 880 Hz
+            )
+            .with_smoother(SmoothingStyle::Linear(50.0))
+            .with_unit("Hz"),
         }
     }
 }
