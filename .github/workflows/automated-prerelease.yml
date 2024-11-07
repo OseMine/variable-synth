@@ -71,7 +71,7 @@ jobs:
             Commit Message: ${{ steps.commit_info.outputs.message }}
             Commit SHA: ${{ steps.commit_info.outputs.sha }}
 
-            [Full Changelog](https://github.com/OseMine/variable-synth/commits/Build)
+            [Full Changelog](https://github.com/OseMine/variable-synth/commits/)
 
             Changes since last release:
             ${{ steps.changelog.outputs.changelog }}

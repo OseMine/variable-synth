@@ -1,6 +1,5 @@
 use super::WaveformGenerator;
 use std::f32::consts::PI;
-use rand::Rng;
 
 pub struct AnalogSawWave {
     sharpness: f32,
