@@ -8,99 +8,104 @@ A versatile audio synthesizer plugin that implements various waveform types and 
 - `src/`
   - `lib.rs`: Main plugin file, contains the plugin implementation and audio processing logic.
   - `params.rs`: Defines the plugin parameters.
-  - `synth/`
-    - `mod.rs`: Manages the different synthesizer types and their selection.
-    - `saw.rs`: Implementation of the saw wave synthesizer.
-    - `sine.rs`: Implementation of the sine wave synthesizer.
+  - `synth/`: Contains the waveform generation logic.
 
-## Adding a New Synthesizer
+## Adding a New Synth Type
 
-This guide explains how to add a new oscillator (synth engine) to the plugin.
+This guide explains in detail how to add a new synth type/engine/algorithm to the plugin.
 
-### Step 1: Create the Oscillator File
+### Step 1: Create the Synth Algorithm File
 
-1. In `src/synth/`, create a new file for the oscillator, such as `square.rs`.
-2. Implement the oscillator with the required trait methods as follows:
+1. In the `src/synth/` directory, create a new file for your synth algorithm, e.g., `custom_synth.rs`.
+2. Implement the `WaveformGenerator` trait for your new synth type:
 
-   ```rust
-   pub struct SquareOscillator {
-       // Oscillator-specific fields
-   }
+```rust
+use super::WaveformGenerator;
 
-   impl Oscillator for SquareOscillator {
-       fn new(sample_rate: f32) -> Self {
-           // Initialization logic
-       }
+pub struct CustomSynth {
+    // Add any necessary fields for your synth
+}
 
-       fn set_frequency(&mut self, freq: f32) {
-           // Frequency setting logic
-       }
+impl WaveformGenerator for CustomSynth {
+    fn generate(&self, phase: f32) -> f32 {
+        // Implement your custom waveform generation logic here
+        // The 'phase' parameter represents the current phase of the waveform (0 to 2π)
+        // Return a value between -1.0 and 1.0
+        
+        // Example: Simple sine wave
+        phase.sin()
+    }
+}
+```
 
-       fn generate(&mut self) -> f32 {
-           // Waveform generation logic
-       }
+### Step 2: Update the Waveform Enum
 
-       fn reset(&mut self) {
-           // Reset logic
-       }
-   }
-   ```
+1. Open `src/params.rs`.
+2. Add your new synth type to the `Waveform` enum:
 
-### Step 2: Register the Oscillator in `mod.rs`
+```rust
+#[derive(Enum, PartialEq, Clone, Copy)]
+pub enum Waveform {
+    // Existing waveforms...
+    #[name = "Custom Synth"]
+    CustomSynth,
+}
+```
+
+### Step 3: Update the Waveform Creation Function
 
 1. Open `src/synth/mod.rs`.
-2. Add the new oscillator as a module:
+2. Import your new synth type:
 
-   ```rust
-   pub mod square;
-   use square::SquareOscillator;
-   ```
+```rust
+mod custom_synth;
+use custom_synth::CustomSynth;
+```
 
-3. Extend the `SynthType` enum to include the new oscillator type:
+3. Update the `create_waveform` function to include your new synth type:
 
-   ```rust
-   pub enum SynthType {
-       // Other synth types...
-       Square,
-   }
-   ```
+```rust
+pub fn create_waveform(waveform: Waveform) -> Arc<dyn WaveformGenerator + Send + Sync> {
+    match waveform {
+        // Existing waveforms...
+        Waveform::CustomSynth => Arc::new(CustomSynth::new()), // Assuming you have a new() method
+    }
+}
+```
 
-4. Update the `Synthesizer` structure to support the new oscillator type:
+### Step 4: Implement Custom Parameters (Optional)
 
-   ```rust
-   impl Synthesizer {
-       // Method to set the oscillator type
-       pub fn set_synth_type(&mut self, synth_type: SynthType) {
-           self.oscillator = match synth_type {
-               // Other types...
-               SynthType::Square => Box::new(SquareOscillator::new(self.sample_rate)),
-           };
-       }
-   }
-   ```
+If your synth algorithm requires custom parameters:
 
-### Step 3: Update Plugin Parameters in `params.rs`
+1. Add new parameters to `VariableSynthParams` in `src/params.rs`:
 
-1. In `src/params.rs`, add the new oscillator type to the `SynthType` enum:
+```rust
+#[derive(Params)]
+pub struct VariableSynthParams {
+    // Existing parameters...
+    #[id = "custom_param"]
+    pub custom_param: FloatParam,
+}
+```
 
-   ```rust
-   #[derive(Enum, PartialEq, Clone)]
-   pub enum SynthType {
-       // Other synth types...
-       Square,
-   }
-   ```
+2. Initialize the new parameter in the `Default` implementation:
 
-### Step 4: Modify the Main Processing Logic
+```rust
+impl Default for VariableSynthParams {
+    fn default() -> Self {
+        Self {
+            // Existing parameters...
+            custom_param: FloatParam::new(
+                "Custom Param",
+                0.5,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_smoother(SmoothingStyle::Linear(50.0)),
+        }
+    }
+}
+```
 
-1. In `src/lib.rs`, update the `process` function to account for the new oscillator type. For example:
-
-   ```rust
-   self.synth.set_synth_type(match synth_type {
-       // Other synth types...
-       ParamSynthType::Square => SynthType::Square,
-   });
-   ```
 
 ### Step 5: Rebuild the Project
 

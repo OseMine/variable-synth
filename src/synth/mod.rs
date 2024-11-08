@@ -5,6 +5,7 @@ mod vasaw;
 mod square;
 mod analogsquare;
 mod vasquare;
+mod amsynth_oscillator;
 
 use std::sync::Arc;
 use crate::params::Waveform;
@@ -21,6 +22,7 @@ pub fn create_waveform(waveform: Waveform) -> Arc<dyn WaveformGenerator + Send +
         Waveform::Square => Arc::new(square::SquareWave),
         Waveform::AnalogSquare => Arc::new(analogsquare::AnalogSquareWave::new(0.1)),
         Waveform::VASquare => Arc::new(vasquare::VASquareWave::new(3, 0.001)),
+        //Waveform::AMSynth => Arc::new(amsynth_oscillator::AmsynthOscillator::new(sample))
     }
 }
 
