@@ -130,4 +130,4 @@ After implementing the steps above, rebuild the project to test your new oscilla
 
 ## License
 
-[MIT](https://choosealicense.com/licenses/mit/)
+[MIT](LICENSE)
