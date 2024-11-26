@@ -3,7 +3,7 @@ use std::sync::Arc;
 mod params;
 mod utils;
 mod synth;
-use params::{VariableSynthParams};
+use params::VariableSynthParams;
 use utils::midi_note_to_freq;
 use synth::{WaveformGenerator, create_waveform};
 extern crate rand;

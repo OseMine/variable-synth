@@ -27,6 +27,9 @@ pub enum Waveform {
     AnalogSquare,
     #[name = "VA Square"]
     VASquare,
+    #[name = "Vintage Saw"]
+    VintageSaw,
+    
 }
 
 impl Default for VariableSynthParams {
